@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intensive-load
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: intensive-load
+  template:
+    metadata:
+      labels:
+        app: intensive-load
+    spec:
+      containers:
+      - name: load-gen
+        image: busybox
+        command:
+        - /bin/sh
+        - -c
+        - |
+          while true; do
+            for i in $(seq 1 1000); do
+              wget -q -O- http://sample-app-service/ &
+            done
+            wait
+            sleep 0.01
+          done
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi

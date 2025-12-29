@@ -1,0 +1,311 @@
+# Complete HPA and ASG Scenarios - All Possible Cases
+
+---
+# Scenario 1: Basic CPU-based HPA
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cpu-app
+  template:
+    metadata:
+      labels:
+        app: cpu-app
+    spec:
+      containers:
+      - name: cpu-app
+        image: nginx
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-app
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+# Scenario 2: Memory-based HPA
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: memory-app
+  template:
+    metadata:
+      labels:
+        app: memory-app
+    spec:
+      containers:
+      - name: memory-app
+        image: nginx
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 100m
+            memory: 512Mi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: memory-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: memory-app
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Scenario 3: Multi-metric HPA (CPU + Memory)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multi-metric-app
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: multi-metric-app
+  template:
+    metadata:
+      labels:
+        app: multi-metric-app
+    spec:
+      containers:
+      - name: app
+        image: nginx
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: multi-metric-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: multi-metric-app
+  minReplicas: 4
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
+
+---
+# Scenario 4: Custom Metrics HPA (RPS - Requests Per Second)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: custom-metrics-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-app
+  minReplicas: 2
+  maxReplicas: 50
+  metrics:
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+# Scenario 5: Large Memory App (Triggers ASG)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: large-memory-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: large-memory-app
+  template:
+    metadata:
+      labels:
+        app: large-memory-app
+    spec:
+      containers:
+      - name: memory-hog
+        image: nginx
+        resources:
+          requests:
+            cpu: 500m
+            memory: 3Gi  # Large memory request
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+        command: ["sh", "-c"]
+        args:
+        - |
+          # Allocate 3GB memory
+          dd if=/dev/zero of=/tmp/memory bs=1M count=3000
+          sleep 3600
+
+---
+# Scenario 6: Batch Job (Triggers ASG Scale-up)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-processing
+spec:
+  parallelism: 10  # 10 parallel pods
+  completions: 10
+  template:
+    spec:
+      containers:
+      - name: processor
+        image: nginx
+        resources:
+          requests:
+            cpu: 1000m  # 1 CPU per pod
+            memory: 2Gi # 2GB per pod
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        command: ["sh", "-c", "sleep 600"]  # 10 minute job
+      restartPolicy: Never
+
+---
+# Scenario 7: Aggressive Scaling HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aggressive-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-app
+  minReplicas: 1
+  maxReplicas: 100
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 30  # Low threshold
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15  # Fast scale-up
+      policies:
+      - type: Percent
+        value: 200  # Double pods quickly
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Slow scale-down
+      policies:
+      - type: Percent
+        value: 10   # Remove 10% at a time
+        periodSeconds: 60
+
+---
+# Scenario 8: Conservative Scaling HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: conservative-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: memory-app
+  minReplicas: 5
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80  # High threshold
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300  # Slow scale-up
+      policies:
+      - type: Pods
+        value: 1  # Add 1 pod at a time
+        periodSeconds: 120
+    scaleDown:
+      stabilizationWindowSeconds: 900  # Very slow scale-down
+      policies:
+      - type: Pods
+        value: 1  # Remove 1 pod at a time
+        periodSeconds: 300

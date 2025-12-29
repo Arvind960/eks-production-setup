@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-intensive-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cpu-intensive-app
+  template:
+    metadata:
+      labels:
+        app: cpu-intensive-app
+    spec:
+      containers:
+      - name: cpu-load
+        image: nginx:alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          apk add --no-cache stress-ng
+          stress-ng --cpu 2 --timeout 300s &
+          nginx -g 'daemon off;'
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cpu-intensive-service
+spec:
+  selector:
+    app: cpu-intensive-app
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cpu-intensive-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cpu-intensive-app
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
