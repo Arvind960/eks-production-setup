@@ -182,13 +182,42 @@ kubectl logs deployment/cluster-autoscaler -n kube-system
 kubectl describe nodes  # Check capacity
 ```
 
+**Cluster Autoscaler permission errors after EKS upgrade:**
+```bash
+# Quick fix for EKS 1.33+ compatibility
+./fix-cluster-autoscaler.sh
+
+# Or manual fix:
+kubectl patch clusterrole cluster-autoscaler --type='json' -p='[{"op": "add", "path": "/rules/12/resources/-", "value": "volumeattachments"}]'
+kubectl rollout restart deployment/cluster-autoscaler -n kube-system
+```
+
 **Pods stuck in Pending:**
 ```bash
 kubectl describe pod <pod-name>
 kubectl get events
 ```
 
-## 💰 Cost Optimization
+## 🔄 EKS Upgrades
+
+### After upgrading EKS cluster:
+
+1. **Update Terraform configuration** (already includes EKS 1.33+ compatibility):
+```bash
+cd terraform/
+terraform plan
+terraform apply
+```
+
+2. **Or run the quick fix script** for existing deployments:
+```bash
+./fix-cluster-autoscaler.sh
+```
+
+### Upgrade Notes:
+- **EKS 1.33+**: Requires `volumeattachments` permission for cluster-autoscaler
+- **Image versions**: Automatically matched to Kubernetes version in Terraform
+- **RBAC**: Updated to include all required permissions for future versions
 
 - **Base Cost**: ~$30/month (2 x t3.small nodes)
 - **Peak Cost**: ~$75/month (5 x t3.small nodes)

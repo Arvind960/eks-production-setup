@@ -84,6 +84,125 @@ resource "kubernetes_service_account" "cluster_autoscaler" {
   }
 }
 
+# Cluster Role with all required permissions for EKS 1.31+
+resource "kubernetes_cluster_role" "cluster_autoscaler" {
+  metadata {
+    name = "cluster-autoscaler"
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["events", "endpoints"]
+    verbs      = ["create", "patch"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["pods/eviction"]
+    verbs      = ["create"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["pods/status"]
+    verbs      = ["update"]
+  }
+
+  rule {
+    api_groups     = [""]
+    resources      = ["endpoints"]
+    resource_names = ["cluster-autoscaler"]
+    verbs          = ["get", "update"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["nodes"]
+    verbs      = ["watch", "list", "get", "update"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["namespaces", "pods", "services", "replicationcontrollers", "persistentvolumeclaims", "persistentvolumes"]
+    verbs      = ["watch", "list", "get"]
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["configmaps"]
+    verbs      = ["create", "list", "watch"]
+  }
+
+  rule {
+    api_groups     = [""]
+    resources      = ["configmaps"]
+    resource_names = ["cluster-autoscaler-status", "cluster-autoscaler"]
+    verbs          = ["delete", "get", "update", "watch"]
+  }
+
+  rule {
+    api_groups = ["extensions"]
+    resources  = ["replicasets", "daemonsets"]
+    verbs      = ["watch", "list", "get"]
+  }
+
+  rule {
+    api_groups = ["policy"]
+    resources  = ["poddisruptionbudgets"]
+    verbs      = ["watch", "list"]
+  }
+
+  rule {
+    api_groups = ["apps"]
+    resources  = ["statefulsets", "replicasets", "daemonsets"]
+    verbs      = ["watch", "list", "get"]
+  }
+
+  rule {
+    api_groups = ["storage.k8s.io"]
+    resources  = ["storageclasses", "csinodes", "csidrivers", "csistoragecapacities", "volumeattachments"]
+    verbs      = ["watch", "list", "get"]
+  }
+
+  rule {
+    api_groups = ["batch", "extensions"]
+    resources  = ["jobs"]
+    verbs      = ["get", "list", "watch", "patch"]
+  }
+
+  rule {
+    api_groups = ["coordination.k8s.io"]
+    resources  = ["leases"]
+    verbs      = ["create"]
+  }
+
+  rule {
+    api_groups     = ["coordination.k8s.io"]
+    resources      = ["leases"]
+    resource_names = ["cluster-autoscaler"]
+    verbs          = ["get", "update"]
+  }
+}
+
+# Cluster Role Binding
+resource "kubernetes_cluster_role_binding" "cluster_autoscaler" {
+  metadata {
+    name = "cluster-autoscaler"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    name      = kubernetes_cluster_role.cluster_autoscaler.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.cluster_autoscaler.metadata[0].name
+    namespace = "kube-system"
+  }
+}
+
 # Cluster Autoscaler Deployment
 resource "kubernetes_deployment" "cluster_autoscaler" {
   metadata {
@@ -118,7 +237,7 @@ resource "kubernetes_deployment" "cluster_autoscaler" {
         service_account_name = kubernetes_service_account.cluster_autoscaler.metadata[0].name
         
         container {
-          image = "registry.k8s.io/autoscaling/cluster-autoscaler:v1.32.0"
+          image = "registry.k8s.io/autoscaling/cluster-autoscaler:v${var.k8s_version}.3"
           name  = "cluster-autoscaler"
 
           resources {
@@ -170,6 +289,8 @@ resource "kubernetes_deployment" "cluster_autoscaler" {
 
   depends_on = [
     aws_eks_node_group.workers,
-    kubernetes_service_account.cluster_autoscaler
+    kubernetes_service_account.cluster_autoscaler,
+    kubernetes_cluster_role.cluster_autoscaler,
+    kubernetes_cluster_role_binding.cluster_autoscaler
   ]
 }
